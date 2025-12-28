@@ -1,35 +1,20 @@
 #pragma once
 
-#include <device_launch_parameters.h>
-#include <unistd.h>
-
-#include "../include/cuda_common.cuh"
-#include "../include/DataArgs.h"
-#include "cublas.h"
-#include "cuda_runtime.h"
-class IMatmul
-{
-public:
-    virtual ~IMatmul() = default;
-    virtual const char* name() const = 0;
-    virtual void init(const MatmulProblem&, cudaStream_t){}
-    virtual void run(const MatmulProblem& p, const MatmulArgs& a, cudaStream_t) = 0;
-    virtual void fini() {}
-};
-
-class CublaseMatMul final : public IMatmul
+#include "../include/Interface.cuh"
+#include "cublas_v2.h"
+class CublasMatMul final : public IMatmul
 {
 private:
     cublasHandle_t h_{nullptr};
     bool tf32_ {false};
 public:
-    explicit CublaseMatMul(bool tf32 = false): tf32_(tf32)
+    explicit CublasMatMul(bool tf32 = false): tf32_(tf32)
     {
         CUBLAS_CHECK(cublasCreate_v2(&h_));
     }
-    ~CublaseMatMul() override
+    ~CublasMatMul() override
     {
-        if (tf32_) cublasDestroy_v2(h_);
+        if (h_) cublasDestroy_v2(h_);
     }
     const char* name() const override {return tf32_? "cuBLAS SGEMM (TF32?)" : "cuBLAS SGEMM";}
 
@@ -79,8 +64,27 @@ __global__ void matmul_tiled(const float* __restrict__ A,
         Bs[threadIdx.y][threadIdx.x] = (b_row < K && col < N) ? B[b_row * N + col] : 0.f;
 
         __syncthreads();
-
-
+#pragma  unroll
+        for (int i =0; i< TILE; ++i) acc +=  As[threadIdx.y][i] * Bs[i][threadIdx.x];
+        __syncthreads();
     }
-
+    if (row < M && col < N) C[row * N + col] = acc;
 }
+
+class Tiled16Matmul final : public IMatmul
+{
+public:
+    const char* name() const override { return "kernel tiled16"; }
+    void run(const MatmulProblem& p, const MatmulArgs& a, cudaStream_t stream) override
+    {
+        constexpr int TILE = 16;
+        dim3 block(TILE, TILE);
+        dim3 grid((p.N + TILE -1 ) / TILE, (p.M + TILE - 1) / TILE);
+        matmul_tiled<TILE><<<grid, block, 0, stream>>>(a.A, a.B, a.C, p.M, p.N, p.K);
+    }
+};
+
+
+std::unique_ptr<IMatmul> make_cublas(bool tf32){return std::make_unique<CublasMatMul>(tf32);}
+std::unique_ptr<IMatmul> make_tiled16() { return std::make_unique<Tiled16Matmul>(); }
+

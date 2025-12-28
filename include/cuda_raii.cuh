@@ -1,7 +1,11 @@
-#include <tbb/task.h>
+//
+// Created by root on 2025/12/28.
+//
 
-#include "../include/cuda_common.cuh"
+#ifndef CATCU_CUDA_RAII_CUH
+#define CATCU_CUDA_RAII_CUH
 
+#include  "cuda_common.cuh"
 
 class CudaStream
 {
@@ -43,7 +47,6 @@ public:
         return ms;
     }
 };
-
 template <class T>
 class DeviceBuffer
 {
@@ -82,3 +85,5 @@ public:
     size_t size() const {return n_;}
 };
 
+
+#endif //CATCU_CUDA_RAII_CUH

@@ -4,6 +4,8 @@ project(CatCu LANGUAGES CXX CUDA)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS  ON)
+set_source_files_properties(main.cpp PROPERTIES LANGUAGE CUDA)
 
 option(ENABLE_CUBLAS "Enable cuBLAS backend" ON)
 option(ENABLE_CUBLASLT "Enable cuBLASLt backend" ON)
@@ -21,9 +23,8 @@ endif()
 find_package(CUDAToolkit REQUIRED)
 
 add_executable(gemm_bench
-        include/DataArgs.cpp
-        src/cuda_raii.cu
         src/Interface.cu
+        main.cpp
 )
 
 target_include_directories(gemm_bench PRIVATE include)
